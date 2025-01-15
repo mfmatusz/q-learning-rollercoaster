@@ -1,53 +1,100 @@
 import random
 import gymnasium as gym
 import numpy as np
+import pickle
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-def run(num_episodes):
-    env = gym.make('MountainCar-v0', render_mode='human')
-    env.metadata['render_fps']= 0
-    position_states = np.linspace(-1.2, 0.6, 20)
-    velocity_states = np.linspace(-0.07, 0.07, 20)
-    Q_table = np.zeros((len(position_states), len(velocity_states), 3))  # initialize Q-table with zeros
+def run(num_episodes, is_training = True, render = False):
+   env = gym.make('MountainCar-v0', render_mode='human' if render else None)
+   env.metadata['render_fps']= 0
+   position_states = np.linspace(-1.2, 0.6, 20)
+   velocity_states = np.linspace(-0.07, 0.07, 20)
+   if is_training:
+       Q_table = np.zeros((len(position_states), len(velocity_states), 3))  # initialize Q-table with zeros
+   else:
+       f = open("Q_table.pkl", "rb")
+       Q_table = pickle.load(f)
+       f.close()
 
-    learning_rate = 0.1
-    discount_rate = 0.9
-    epsilon = 1.0  # Start with full exploration
+   learning_rate = 0.9
+   discount_rate = 0.9
+   epsilon = 1.0  # Start with full exploration
 
-    for episode in range(num_episodes):
-        state = env.reset()[0]
-        state_p = np.digitize(state[0], position_states)
-        state_v = np.digitize(state[1], velocity_states)
+   episode_rewards = []
 
-        total_reward = 0
-        done = False
+   for episode in range(num_episodes):
+       state = env.reset()[0]
+       state_p = np.digitize(state[0], position_states)
+       state_v = np.digitize(state[1], velocity_states)
 
-        while not done:  # Run until the environment signals termination
-            # Epsilon-greedy action selection
-            if random.uniform(0, 1) < epsilon:
-                action = env.action_space.sample()
-            else:
-                action = np.argmax(Q_table[state_p, state_v, :])
+       total_reward = 0
+       done = False
 
-            next_state, reward, done, _, _ = env.step(action)
-            next_state_p = np.digitize(next_state[0], position_states)
-            next_state_v = np.digitize(next_state[1], velocity_states)
+       while not done and total_reward > -1000:  # Run until the environment signals termination
+           # Epsilon-greedy action selection
+           if random.uniform(0, 1) < epsilon and is_training:
+               action = env.action_space.sample()
+           else:
+               action = np.argmax(Q_table[state_p, state_v, :])
 
-            # Update Q-table using Q-Learning formula
-            Q_table[state_p, state_v, action] += learning_rate * (
-                reward + discount_rate * np.max(Q_table[next_state_p, next_state_v, :]) - Q_table[state_p, state_v, action]
-            )
+           next_state, reward, done, _, _ = env.step(action)
+           next_state_p = np.digitize(next_state[0], position_states)
+           next_state_v = np.digitize(next_state[1], velocity_states)
 
-            # Move to the next state
-            state_p, state_v = next_state_p, next_state_v
-            total_reward += reward  # Accumulate reward for the episode
+           if is_training:
+           # Update Q-table using Q-Learning formula
+               Q_table[state_p, state_v, action] += learning_rate * (
+                   reward + discount_rate * np.max(Q_table[next_state_p, next_state_v, :]) - Q_table[state_p, state_v, action]
+               )
 
-        # Decay epsilon
-        epsilon = max(0.01, epsilon - 1 / num_episodes)
+           # Move to the next state
+           state_p, state_v = next_state_p, next_state_v
+           total_reward += reward  # Accumulate reward for the episode
 
-        # Log results
-        print(f"Episode: {episode + 1}, Total Reward: {total_reward:.2f}, Epsilon: {epsilon:.2f}")
+       # Decay epsilon
+       epsilon = max(epsilon - 2/num_episodes, 0)
 
-    env.close()
+       episode_rewards.append(total_reward)
+
+       # Log results
+       print(f"Episode: {episode + 1}, Total Reward: {total_reward:.2f}, Epsilon: {epsilon:.2f}")
+
+   env.close()
+   
+   # Save Q-table and plot
+   if is_training:
+       f = open("Q_table.pkl", "wb")
+       pickle.dump(Q_table, f)
+       f.close()
+       plot_q_table(Q_table)
+   
+   # Moving average plot
+   plt.figure()
+   window_size = 100
+   mean_rewards = []
+   for i in range(len(episode_rewards)):
+       start_idx = max(0, i - window_size + 1)
+       mean_rewards.append(np.mean(episode_rewards[start_idx:i+1]))
+   
+   plt.plot(mean_rewards)
+   plt.title('Mean Rewards per Episode (Moving Average)')
+   plt.xlabel('Episode')
+   plt.ylabel('Mean Reward')
+   plt.savefig('mountain_car_mean_rewards_per_episode.png')
+   plt.close()
+
+
+def plot_q_table(Q_table):
+   fig, ax = plt.subplots(figsize=(10, 10))
+   heatmap = sns.heatmap(np.max(Q_table, axis=2), cmap="viridis", ax=ax)
+   ax.set_title("Q-table Visualization")
+   ax.set_xlabel("Velocity State")
+   ax.set_ylabel("Position State")
+   fig = heatmap.get_figure()
+   fig.savefig('mountain_car_q_table.png')
+   plt.close(fig)  
 
 if __name__ == '__main__':
-    run(200)
+   #run(1000, is_training=True, render=False)
+   run(10, is_training=False, render=True)
