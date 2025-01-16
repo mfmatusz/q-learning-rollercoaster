@@ -5,10 +5,11 @@ import pickle
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def run(num_episodes, is_training = True, render = False):
+def run(num_episodes, is_training = True, render = False, initial_p=None):
    # Initialize environment
    env = gym.make('MountainCar-v0', render_mode='human' if render else None)
-   env.metadata['render_fps']= 60
+   env = env.unwrapped
+   env.metadata['render_fps']= 1
    position_states = np.linspace(-1.2, 0.6, 20)
    velocity_states = np.linspace(-0.07, 0.07, 20)
    if is_training:
@@ -18,16 +19,20 @@ def run(num_episodes, is_training = True, render = False):
        Q_table = pickle.load(f)
        f.close()
 
-   learning_rate = 0.9
+   learning_rate = 0.4
    discount_rate = 0.9
    epsilon = 1  # Start with full exploration
 
    episode_rewards = []
 
    for episode in range(num_episodes):
-       state = env.reset()[0]
-       state_p = np.digitize(state[0], position_states)
-       state_v = np.digitize(state[1], velocity_states)
+       if initial_p:
+            env.state = np.array([initial_p, 0])
+       else:
+            env.reset()
+       
+       state_p = np.digitize(env.state[0], position_states)
+       state_v = np.digitize(env.state[1], velocity_states)
 
        total_reward = 0
        done = False
@@ -111,6 +116,6 @@ def plot_rewards_per_episode(episode_rewards):
 
 if __name__ == '__main__':
     # For training
-    run(2000, is_training=True, render=False)
+    run(5000, is_training=True, render=False, initial_p=-0.5)
     # For testing (with a trained Q-table)
-    #run(10, is_training=False, render=True)
+    #run(10, is_training=False, render=False, initial_p= -0.5)
