@@ -6,8 +6,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 def run(num_episodes, is_training = True, render = False):
+   # Initialize environment
    env = gym.make('MountainCar-v0', render_mode='human' if render else None)
-   env.metadata['render_fps']= 0
+   env.metadata['render_fps']= 60
    position_states = np.linspace(-1.2, 0.6, 20)
    velocity_states = np.linspace(-0.07, 0.07, 20)
    if is_training:
@@ -19,7 +20,7 @@ def run(num_episodes, is_training = True, render = False):
 
    learning_rate = 0.9
    discount_rate = 0.9
-   epsilon = 1.0  # Start with full exploration
+   epsilon = 1  # Start with full exploration
 
    episode_rewards = []
 
@@ -31,7 +32,7 @@ def run(num_episodes, is_training = True, render = False):
        total_reward = 0
        done = False
 
-       while not done and total_reward > -1000:  # Run until the environment signals termination
+       while not done and total_reward > -1000:  # Run until the environment signals termination or the car does too many actions
            # Epsilon-greedy action selection
            if random.uniform(0, 1) < epsilon and is_training:
                action = env.action_space.sample()
@@ -67,23 +68,14 @@ def run(num_episodes, is_training = True, render = False):
        f = open("Q_table.pkl", "wb")
        pickle.dump(Q_table, f)
        f.close()
+       # Save Q-table visualization
        plot_q_table(Q_table)
-   
-   # Moving average plot
-   plt.figure()
-   window_size = 100
-   mean_rewards = []
-   for i in range(len(episode_rewards)):
-       start_idx = max(0, i - window_size + 1)
-       mean_rewards.append(np.mean(episode_rewards[start_idx:i+1]))
-   
-   plt.plot(mean_rewards)
-   plt.title('Mean Rewards per Episode (Moving Average)')
-   plt.xlabel('Episode')
-   plt.ylabel('Mean Reward')
-   plt.savefig('mountain_car_mean_rewards_per_episode.png')
-   plt.close()
 
+   # Save rewards per episode plot
+   plot_rewards_per_episode(episode_rewards)
+
+   # Save moving average plot
+   plot_moving_average(episode_rewards)
 
 def plot_q_table(Q_table):
    fig, ax = plt.subplots(figsize=(10, 10))
@@ -95,6 +87,30 @@ def plot_q_table(Q_table):
    fig.savefig('mountain_car_q_table.png')
    plt.close(fig)  
 
+def plot_moving_average(episode_rewards):
+   window_size = 100
+   mean_rewards = []
+   for i in range(len(episode_rewards)):
+       start_idx = max(0, i - window_size + 1)
+       mean_rewards.append(np.mean(episode_rewards[start_idx:i+1]))
+   plt.plot(mean_rewards)
+   plt.title('Mean Rewards per Episode (Moving Average)')
+   plt.xlabel('Episode')
+   plt.ylabel('Mean Reward')
+   plt.savefig('mountain_car_moving_average.png')
+   plt.close()
+
+def plot_rewards_per_episode(episode_rewards):
+   plt.figure()
+   plt.title('Rewards per Episode')
+   plt.plot(episode_rewards)
+   plt.xlabel('Episode')
+   plt.ylabel('Reward')
+   plt.savefig('mountain_car_rewards_per_episode.png')
+   plt.close()   
+
 if __name__ == '__main__':
-   #run(1000, is_training=True, render=False)
-   run(10, is_training=False, render=True)
+    # For training
+    run(2000, is_training=True, render=False)
+    # For testing (with a trained Q-table)
+    #run(10, is_training=False, render=True)
